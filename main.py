@@ -1,5 +1,5 @@
 # main.py
-
+# рабочая часть программы
 from fastapi import FastAPI
 from tasks1 import update_currency
 

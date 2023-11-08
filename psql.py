@@ -1,3 +1,4 @@
+# рабочая часть программы
 from sqlalchemy import create_engine, Column, Float, Integer, MetaData, Table, Text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
