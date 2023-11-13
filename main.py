@@ -1,24 +1,39 @@
-# main.py
-# рабочая часть программы
-from fastapi import FastAPI
-from tasks1 import update_currency
+from fastapi import FastAPI, HTTPException
+import redis
+import json
 
 app = FastAPI()
 
-
-@app.get("/data", response_model=tuple | str)
-async def get_data(total: int = 0):
-    # Вызываем задачу update_currency
-    result = update_currency.delay()
-    # Ожидаем завершения задачи и получаем значение sp
-    sp = result.get()
-    # Возможно, вернуть текущий курс
-    return f'Курс доллара = {sp["USD"]} рублей.\nКурс евро = {sp["EUR"]} рублей'
+# Подключение к Redis
+redis_instance = redis.StrictRedis(host='localhost', port=6379, db=0)
 
 
-@app.post("/update_currency")
-async def run_update_currency_task():
-    # Вызываем задачу update_currency
-    update_currency.delay()
-    return {"message": "Задача обновления курса запущена"}
+@app.get("/data", response_model=dict)
+async def get_data():
+    currency_data = redis_instance.get("currency_data")
+    if currency_data:
+        return json.loads(currency_data)
+    else:
+        raise HTTPException(status_code=404, detail="Данные о валютах не найдены")
+
+
+@app.get("/convert/{rub_amount}", response_model=dict)
+async def convert_currency(rub_amount: float):
+    currency_data = redis_instance.get("currency_data")
+    if not currency_data:
+        raise HTTPException(status_code=404, detail="Данные о валютах не найдены")
+
+    exchange_rates = json.loads(currency_data)
+    converted_values = {}
+
+    for currency, rate in exchange_rates.items():
+        # Пропускаем RUB, так как пользователь уже передаёт сумму в рублях
+        if currency != 'RUB':
+            converted_values[currency] = rub_amount / rate
+
+    return {
+        "message": f"У вас {rub_amount} рублей",
+        "converted_values": converted_values
+    }
+
 
