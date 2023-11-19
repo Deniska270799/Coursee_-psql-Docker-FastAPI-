@@ -10,7 +10,7 @@ services:
       - redis
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql://$PSQL_USER:$PSQL_PASSWORD@db/$PSQL_NAME
+      - DATABASE_URL=postgresql://$PSQL_USER:$PSQL_PASSWORD@db:5432/$PSQL_NAME
       - REDIS_URL=redis://redis:6379/0
     command: uvicorn main:app
 
