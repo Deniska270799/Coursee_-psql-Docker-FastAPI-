@@ -1,3 +1,4 @@
+alembic==1.12.1
 celery==5.3.4
 fastapi[all]==0.104.1
 psycopg2-binary==2.9.9
