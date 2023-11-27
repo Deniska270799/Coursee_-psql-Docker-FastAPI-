@@ -1,10 +1,10 @@
-from celery_worker import key_currencies
 from config import redis_host, redis_port, redis_db
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
 import json
-from psql import SessionLocal, CurrencyRates
+from app.db.psql import SessionLocal
 from pydantic import BaseModel, validator
 import redis
+from sqlalchemy import text
 from typing import Dict
 
 
@@ -16,6 +16,10 @@ class CurrencyRatesResponse(BaseModel):
         if isinstance(v, str):
             return json.loads(v)
         return v
+
+class Currency_Convert(BaseModel):
+    currency: str
+    amount: float
 
 app = FastAPI()
 redis_instance = redis.StrictRedis(host=redis_host, port=int(redis_port), db=int(redis_db))
@@ -29,28 +33,40 @@ async def get_data():
         raise HTTPException(status_code=404, detail="Данные о валютах не найдены")
 
 
-@app.get("/convert")
-async def convert_currency(currency: str = Query(...), amount: float = Query(...)):
+@app.post("/convert")
+async def convert_currency(request: Currency_Convert):
     currency_data = redis_instance.get("currency_data")
     if not currency_data:
         with SessionLocal() as session:
-            recent_rates = session.query(CurrencyRates).order_by(CurrencyRates.datetime.desc()).limit(len(key_currencies)).all()
-            exchange_rates = {rate.currency: rate.rate for rate in recent_rates}
+            # Сырой SQL-запрос для получения последних курсов валют
+            sql_query = text("""
+                    SELECT DISTINCT ON (currency) currency, rate
+                    FROM currency_rates
+                    ORDER BY currency, datetime DESC
+                """)
+            result = session.execute(sql_query)
+            exchange_rates = {row.currency: row.rate for row in result}
     else:
         exchange_rates = json.loads(currency_data)
 
-    if currency not in exchange_rates:
-        raise HTTPException(status_code=404, detail=f"Курс для валюты {currency} не найден")
+    if request.currency not in exchange_rates:
+        raise HTTPException(status_code=404, detail=f"Курс для валюты {request.currency} не найден")
 
     converted_values = {}
-    amount_in_usd = amount / exchange_rates[currency] if currency != "USD" else amount
+    amount_in_usd = request.amount / exchange_rates[request.currency] if request.currency != "USD" else request.amount
     for other_currency in exchange_rates:
-        if other_currency != currency:
+        if other_currency != request.currency:
             converted_amount = amount_in_usd * exchange_rates[other_currency]
             converted_values[other_currency] = converted_amount
 
-    key = f"{currency}_{amount}"
-    return {key: converted_values}
+    return {
+        "your_currency": request.currency,
+        "your_amount": request.amount,
+        "converted_currencies": converted_values
+    }
+
+
+
 
 
 
